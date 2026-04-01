@@ -4,7 +4,7 @@ import os
 
 from qgis.PyQt.QtCore import QCoreApplication, QSettings, QSize, Qt, QTimer, QTranslator
 from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QMenu, QSplitter, QTreeView
+from qgis.PyQt.QtWidgets import QMenu, QScrollArea, QSplitter, QTreeView
 
 try:
     from qgis.PyQt.QtGui import QAction  # Qt6
@@ -60,6 +60,7 @@ class AttributeWindow:
         self.dockwidget = None
 
         self.featureForm = None
+        self.formScrollArea = None
         self.layerTree = None
         self.splitter = None
 
@@ -148,6 +149,34 @@ class AttributeWindow:
             self.iface.removeToolBarIcon(action)
         del self.toolbar
 
+    def _wrapInScrollArea(self, widget):
+        """Wrap a widget in a QScrollArea to prevent layout blowup
+        with tall Drag-and-Drop Designer forms."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        try:
+            scroll.setFrameShape(QScrollArea.Shape.NoFrame)  # Qt6
+        except AttributeError:
+            scroll.setFrameShape(QScrollArea.NoFrame)  # Qt5
+        scroll.setWidget(widget)
+        return scroll
+
+    def _removeOldForm(self):
+        """Clean up the previous feature form and its scroll area."""
+        if self.featureForm is not None:
+            try:
+                self.featureForm.accept()
+            except Exception:
+                try:
+                    self.featureForm.close()
+                except Exception:
+                    pass
+            self.featureForm = None
+        if self.formScrollArea is not None:
+            self.formScrollArea.setParent(None)
+            self.formScrollArea.deleteLater()
+            self.formScrollArea = None
+
     def updateAttributes(self):
         self.splitter = QSplitter(_Vertical)
         self.layerTree = QTreeView()
@@ -162,15 +191,7 @@ class AttributeWindow:
 
         self.splitter.addWidget(self.layerTree)
 
-        if self.featureForm is not None:
-            try:
-                self.featureForm.accept()
-            except Exception:
-                try:
-                    self.featureForm.close()
-                except Exception:
-                    pass
-            self.featureForm = None
+        self._removeOldForm()
 
         self.featuresInLayerTree = []
 
@@ -216,13 +237,15 @@ class AttributeWindow:
             first_layer = self.featuresInLayerTree[2]
             try:
                 self.featureForm = self.iface.getFeatureForm(first_layer, first_feature)
-                self.splitter.addWidget(self.featureForm)
+                self.formScrollArea = self._wrapInScrollArea(self.featureForm)
+                self.splitter.addWidget(self.formScrollArea)
                 self.featureForm.show()
                 self.splitter.setSizes([100, 500])
                 if self.dockwidget is not None:
                     self.dockwidget.setWidget(self.splitter)
             except Exception:
                 self.featureForm = None
+                self.formScrollArea = None
 
     def updateFeatureFromTreeView(self, index):
         if not index.isValid():
@@ -237,18 +260,13 @@ class AttributeWindow:
 
                 self.iface.setActiveLayer(layer)
 
-                if self.featureForm is not None:
-                    try:
-                        self.featureForm.accept()
-                    except Exception:
-                        try:
-                            self.featureForm.close()
-                        except Exception:
-                            pass
+                self._removeOldForm()
 
                 self.featureForm = self.iface.getFeatureForm(layer, feature)
-                self.splitter.addWidget(self.featureForm)
+                self.formScrollArea = self._wrapInScrollArea(self.featureForm)
+                self.splitter.addWidget(self.formScrollArea)
                 self.featureForm.show()
+                self.splitter.setSizes([100, 500])
                 return
 
     def openMenu(self, position):
