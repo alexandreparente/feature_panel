@@ -55,8 +55,6 @@ class AttributeWindow:
         self.toolbar = self.iface.addToolBar("AttributeWindow")
         self.toolbar.setObjectName("AttributeWindow")
 
-        self.project = QgsProject.instance()
-        self.pluginIsActive = False
         self.dockwidget = None
 
         self.featureForm = None
@@ -71,11 +69,6 @@ class AttributeWindow:
         self.lstHighlights = []
         self.timer.timeout.connect(self.finishFlash)
 
-        settings = QgsSettings()
-        isOpen = settings.value("attributeWindow/isopen", "False")
-        if isOpen == "True":
-            self.run()
-
     def tr(self, message):
         """Get the translation for a string using Qt translation API."""
         return QCoreApplication.translate("AttributeWindow", message)
@@ -84,8 +77,6 @@ class AttributeWindow:
         self,
         icon_path,
         text,
-        callback,
-        enabled_flag=True,
         add_to_menu=True,
         add_to_toolbar=True,
         status_tip=None,
@@ -95,8 +86,7 @@ class AttributeWindow:
         """Add a toolbar icon to the toolbar."""
         icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.png"))
         action = QAction(icon, text, parent)
-        action.triggered.connect(callback)
-        action.setEnabled(enabled_flag)
+        action.setCheckable(True)
 
         if status_tip is not None:
             action.setStatusTip(status_tip)
@@ -117,33 +107,25 @@ class AttributeWindow:
         self.add_action(
             icon_path,
             text=self.tr("Attribute Window"),
-            callback=self.run,
             parent=self.iface.mainWindow(),
         )
-        self.handler = None
-        self.selected_layer = None
 
-    def onClosePlugin(self):
-        """Cleanup necessary items here when plugin dockwidget is closed."""
-        try:
-            self.dockwidget.closingPlugin.disconnect(self.onClosePlugin)
-        except Exception:
-            pass
+        self.dockwidget = AttributeWindowDockWidget()
+        self.dockwidget.setMinimumSize(QSize(200, 300))
+        self.dockwidget.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.dockwidget.setToggleVisibilityAction(self.actions[0])
+        self.iface.addDockWidget(_RightDockWidgetArea, self.dockwidget)
+        self.updateAttributes()
+        self.dockwidget.hide()
 
-        try:
-            self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
-        except Exception:
-            pass
-
-        for action in self.actions:
-            action.setChecked(False)
-
-        self.pluginIsActive = False
-        settings = QgsSettings()
-        settings.setValue("attributeWindow/isopen", "False")
+        self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
+        self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
+
         for action in self.actions:
             self.iface.removePluginMenu(self.tr("&Feature Attribute Window"), action)
             self.iface.removeToolBarIcon(action)
@@ -365,24 +347,3 @@ class AttributeWindow:
             self.updateAttributes()
         except Exception:
             pass
-
-    def run(self):
-        """Run method that loads and starts the plugin."""
-        settings = QgsSettings()
-
-        if not self.pluginIsActive:
-            self.pluginIsActive = True
-
-            self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
-
-            if self.dockwidget is None:
-                self.dockwidget = AttributeWindowDockWidget()
-                self.dockwidget.setMinimumSize(QSize(200, 300))
-                self.updateAttributes()
-
-            self.dockwidget.closingPlugin.connect(self.onClosePlugin)
-
-            self.iface.addDockWidget(_RightDockWidgetArea, self.dockwidget)
-            self.dockwidget.show()
-
-            settings.setValue("attributeWindow/isopen", "True")
