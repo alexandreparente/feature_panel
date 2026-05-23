@@ -213,15 +213,40 @@ class AttributeWindow:
             # O singleShot joga o update para o fim do ciclo de eventos do Qt, evitando o crash
             QTimer.singleShot(0, self._doUpdateAttributes)
 
-    def unload(self):
-        self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
-        QApplication.instance().focusWindowChanged.disconnect(self._onFocusWindowChanged)
+      def unload(self):
+
+        try:
+            self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
+        except Exception:
+            pass
+
+        try:
+            QApplication.instance().focusWindowChanged.disconnect(self._onFocusWindowChanged)
+        except Exception:
+            pass
+
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+        self.finishFlash()
+
+        self.a = None
+        self.featuresInLayerTree = []
         self._trackEditingLayer(None)
+        self._removeOldForm()
 
         for action in self.actions:
-            self.iface.removePluginMenu(self.tr("&Feature Attribute Window"), action)
-            self.iface.removeToolBarIcon(action)
+            try:
+                self.iface.removePluginMenu(self.tr("&Feature Attribute Window"), action)
+                self.iface.removeToolBarIcon(action)
+            except Exception:
+                pass
+
+        if self.toolbar is not None:
+            self.iface.mainWindow().removeToolBar(self.toolbar)
+            self.toolbar.deleteLater()
+
         del self.toolbar
+
 
     def _wrapInScrollArea(self, widget):
         scroll = QScrollArea()
