@@ -172,7 +172,8 @@ class AttributeWindow:
         if layer.isEditable():
             if self.featureForm is not None:
                 self.featureForm.attributeForm().save()
-            layer.commitChanges()
+            self.iface.setActiveLayer(layer)
+            self.iface.actionToggleEditing().trigger()
             self._doUpdateAttributes()
         else:
             layer.startEditing()
