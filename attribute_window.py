@@ -213,8 +213,7 @@ class AttributeWindow:
             # O singleShot joga o update para o fim do ciclo de eventos do Qt, evitando o crash
             QTimer.singleShot(0, self._doUpdateAttributes)
 
-      def unload(self):
-
+    def unload(self):
         try:
             self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
         except Exception:
@@ -438,7 +437,7 @@ class AttributeWindow:
         try:
             curr_scale = self.iface.mapCanvas().scale()
             itemIndex = self.featuresInLayerTree.index(self.a)
-            feature = self.featuresInFeatureTree[itemIndex + 1] # Mantido conforme original, confira se não é self.featuresInLayerTree
+            feature = self.featuresInLayerTree[itemIndex + 1]  # Corrigido aqui (estava featuresInFeatureTree)
             layer = self.featuresInLayerTree[itemIndex + 2]
             self.iface.mapCanvas().zoomToFeatureIds(layer, [feature.id()])
             self.iface.mapCanvas().zoomScale(curr_scale)
