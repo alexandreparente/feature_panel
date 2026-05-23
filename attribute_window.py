@@ -170,7 +170,10 @@ class AttributeWindow:
             self.toggleEditingAction.setChecked(False)
             return
         if layer.isEditable():
+            if self.featureForm is not None:
+                self.featureForm.attributeForm().save()
             layer.commitChanges()
+            self._doUpdateAttributes()
         else:
             layer.startEditing()
         self._syncToggleEditingButton()
@@ -220,7 +223,7 @@ class AttributeWindow:
             child.hide()
 
     def _onFocusWindowChanged(self, window):
-        """Executa update pendente de forma segura quando o foco retorna à janela principal."""
+        """Safely runs the pending update once the main window regains focus."""
         if not self._pendingUpdate:
             return
         active_window = QApplication.activeWindow()
