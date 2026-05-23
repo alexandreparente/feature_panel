@@ -4,7 +4,7 @@ import os
 
 from qgis.PyQt.QtCore import QCoreApplication, QSettings, QSize, Qt, QTimer, QTranslator
 from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
-from qgis.PyQt.QtWidgets import QAction, QDialogButtonBox, QMenu, QScrollArea, QSplitter, QTreeView
+from qgis.PyQt.QtWidgets import QAction, QApplication, QDialogButtonBox, QMenu, QScrollArea, QSplitter, QTreeView
 
 try:
     from qgis.PyQt.QtGui import QAction  # Qt6
@@ -51,6 +51,7 @@ class AttributeWindow:
         self.dockwidget = None
         self.toggleEditingAction = None
         self._editingTrackedLayer = None
+        self._pendingUpdate = False
 
         self.featureForm = None
         self.formScrollArea = None
@@ -140,6 +141,7 @@ class AttributeWindow:
         self.dockwidget.hide()
 
         self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
+        QApplication.instance().focusWindowChanged.connect(self._onFocusWindowChanged)
 
     def _currentLayer(self):
         """Return the layer of the currently selected tree item, or None."""
@@ -201,8 +203,19 @@ class AttributeWindow:
         for child in form.findChildren(QDialogButtonBox):
             child.hide()
 
+    def _onFocusWindowChanged(self, window):
+        """Executa update pendente de forma segura quando o foco retorna à janela principal."""
+        if not self._pendingUpdate:
+            return
+        active_window = QApplication.activeWindow()
+        if active_window is self.iface.mainWindow():
+            self._pendingUpdate = False
+            # O singleShot joga o update para o fim do ciclo de eventos do Qt, evitando o crash
+            QTimer.singleShot(0, self._doUpdateAttributes)
+
     def unload(self):
         self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
+        QApplication.instance().focusWindowChanged.disconnect(self._onFocusWindowChanged)
         self._trackEditingLayer(None)
 
         for action in self.actions:
@@ -231,11 +244,25 @@ class AttributeWindow:
                     pass
             self.featureForm = None
         if self.formScrollArea is not None:
-            self.formScrollArea.setParent(None)
-            self.formScrollArea.deleteLater()
+            try:
+                if self.formScrollArea.widget():
+                    self.formScrollArea.widget().setParent(None)
+                self.formScrollArea.setParent(None)
+                self.formScrollArea.deleteLater()
+            except Exception:
+                pass
             self.formScrollArea = None
 
     def updateAttributes(self):
+        """Skip update if another window (e.g. attribute table) is active."""
+        active_window = QApplication.activeWindow()
+        if active_window is not None and active_window is not self.iface.mainWindow():
+            self._pendingUpdate = True
+            return
+        self._pendingUpdate = False
+        self._doUpdateAttributes()
+
+    def _doUpdateAttributes(self):
         self.splitter = QSplitter(_Vertical)
         self.layerTree = QTreeView()
         self.layerTree.setHeaderHidden(True)
@@ -386,7 +413,7 @@ class AttributeWindow:
         try:
             curr_scale = self.iface.mapCanvas().scale()
             itemIndex = self.featuresInLayerTree.index(self.a)
-            feature = self.featuresInLayerTree[itemIndex + 1]
+            feature = self.featuresInFeatureTree[itemIndex + 1] # Mantido conforme original, confira se não é self.featuresInLayerTree
             layer = self.featuresInLayerTree[itemIndex + 2]
             self.iface.mapCanvas().zoomToFeatureIds(layer, [feature.id()])
             self.iface.mapCanvas().zoomScale(curr_scale)
