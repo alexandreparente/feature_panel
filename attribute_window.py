@@ -2,7 +2,7 @@
 
 import os
 
-from qgis.PyQt.QtCore import QCoreApplication, QSettings, QSize, Qt, QTimer, QTranslator
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTimer, QTranslator
 from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import QAction, QApplication, QDialogButtonBox, QMenu, QScrollArea, QSplitter, QTreeView
 
@@ -11,7 +11,7 @@ try:
 except ImportError:
     from qgis.PyQt.QtWidgets import QAction  # Qt5
 
-from qgis.core import QgsApplication, QgsProject, QgsSettings, QgsVectorLayer, edit
+from qgis.core import QgsApplication, QgsSettings, QgsVectorLayer
 from qgis.gui import QgsHighlight
 
 from .attribute_window_dockwidget import AttributeWindowDockWidget
