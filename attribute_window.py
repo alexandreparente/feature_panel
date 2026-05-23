@@ -50,6 +50,7 @@ class AttributeWindow:
 
         self.dockwidget = None
         self.toggleEditingAction = None
+        self.deleteAction = None
         self._editingTrackedLayer = None
         self._pendingUpdate = False
 
@@ -137,6 +138,15 @@ class AttributeWindow:
         flashAction.triggered.connect(self.flashFeatureActionFunc)
         self.dockwidget.toolbar.addAction(flashAction)
 
+        self.deleteAction = QAction(
+            QgsApplication.getThemeIcon("mActionDeleteSelectedFeatures.svg"),
+            self.tr("Delete Feature"),
+            self.dockwidget,
+        )
+        self.deleteAction.setEnabled(False)
+        self.deleteAction.triggered.connect(self.deleteFeatureActionFunc)
+        self.dockwidget.toolbar.addAction(self.deleteAction)
+
         self.updateAttributes()
         self.dockwidget.hide()
 
@@ -192,11 +202,17 @@ class AttributeWindow:
             return
         layer = self._currentLayer()
         if layer is not None and isinstance(layer, QgsVectorLayer):
+            is_editable = layer.isEditable()
             self.toggleEditingAction.setEnabled(True)
-            self.toggleEditingAction.setChecked(layer.isEditable())
+            self.toggleEditingAction.setChecked(is_editable)
+
+            if self.deleteAction is not None:
+                self.deleteAction.setEnabled(is_editable)
         else:
             self.toggleEditingAction.setEnabled(False)
             self.toggleEditingAction.setChecked(False)
+            if self.deleteAction is not None:
+                self.deleteAction.setEnabled(False)
 
     def _suppressActionMenu(self, form):
         """Oculta o menu de ações (duplicar recurso) do QgsFeatureForm."""
@@ -210,7 +226,6 @@ class AttributeWindow:
         active_window = QApplication.activeWindow()
         if active_window is self.iface.mainWindow():
             self._pendingUpdate = False
-            # O singleShot joga o update para o fim do ciclo de eventos do Qt, evitando o crash
             QTimer.singleShot(0, self._doUpdateAttributes)
 
     def unload(self):
@@ -411,6 +426,11 @@ class AttributeWindow:
         flash_action.triggered.connect(self.flashFeatureActionFunc)
 
         delete_action = menu.addAction("Delete")
+        layer = self._currentLayer()
+        if layer is not None and isinstance(layer, QgsVectorLayer):
+            delete_action.setEnabled(layer.isEditable())
+        else:
+            delete_action.setEnabled(False)
         delete_action.triggered.connect(self.deleteFeatureActionFunc)
 
         menu.exec(self.layerTree.viewport().mapToGlobal(position))
@@ -437,7 +457,7 @@ class AttributeWindow:
         try:
             curr_scale = self.iface.mapCanvas().scale()
             itemIndex = self.featuresInLayerTree.index(self.a)
-            feature = self.featuresInLayerTree[itemIndex + 1]  # Corrigido aqui (estava featuresInFeatureTree)
+            feature = self.featuresInLayerTree[itemIndex + 1]
             layer = self.featuresInLayerTree[itemIndex + 2]
             self.iface.mapCanvas().zoomToFeatureIds(layer, [feature.id()])
             self.iface.mapCanvas().zoomScale(curr_scale)
@@ -472,14 +492,60 @@ class AttributeWindow:
             self.lstHighlights = []
 
     def deleteFeatureActionFunc(self):
+        """deletes ONLY the selected feature in the QTreeView, preserving the other features."""
         try:
+            if self.layerTree is not None:
+                selection_model = self.layerTree.selectionModel()
+                if selection_model and selection_model.hasSelection():
+                    index = selection_model.currentIndex()
+                    if index.isValid():
+                        self.a = index.model().itemFromIndex(index)
+
+            if self.a is None:
+                return
+
             itemIndex = self.featuresInLayerTree.index(self.a)
             feature = self.featuresInLayerTree[itemIndex + 1]
             layer = self.featuresInLayerTree[itemIndex + 2]
 
-            with edit(layer):
-                layer.deleteFeature(feature.id())
+            if not layer or not layer.isEditable():
+                return
+            try:
+                self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
+            except Exception:
+                pass
 
+            original_selection = layer.selectedFeatureIds()
+
+            layer.selectByIds([feature.id()])
+            self.iface.setActiveLayer(layer)
+
+            delete_action = self.iface.mainWindow().findChild(QAction, "mActionDeleteSelected")
+            if delete_action is not None:
+                delete_action.trigger()
+
+            is_deleted = (layer.getFeature(feature.id()).isValid() is False)
+
+            if not is_deleted:
+                layer.selectByIds(original_selection)
+            else:
+                remaining_selection = [fid for fid in original_selection if fid != feature.id()]
+                layer.selectByIds(remaining_selection)
+
+            self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
+
+            self.a = None
+            QTimer.singleShot(0, self._safeRefreshAfterDelete)
+
+        except (ValueError, IndexError, RuntimeError):
+            try:
+                self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
+            except Exception:
+                pass
+
+    def _safeRefreshAfterDelete(self):
+        """Asynchronously synchronizes layouts after the dialog close."""
+        try:
             self.iface.mapCanvas().refresh()
             self.updateAttributes()
         except Exception:
