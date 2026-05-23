@@ -130,7 +130,7 @@ class AttributeWindow:
         self.dockwidget.toolbar.addAction(zoomAction)
 
         flashAction = QAction(
-            QIcon(os.path.join(self.plugin_dir, "icons", "mActionFlash.svg")),
+            QgsApplication.getThemeIcon("mActionHighlightFeature.svg"),
             self.tr("Flash Feature"),
             self.dockwidget,
         )
