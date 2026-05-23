@@ -365,7 +365,8 @@ class AttributeWindow:
             first_feature = self.featuresInLayerTree[1]
             first_layer = self.featuresInLayerTree[2]
             try:
-                self.featureForm = self.iface.getFeatureForm(first_layer, first_feature)
+                current_first_feature = first_layer.getFeature(first_feature.id())  # ✅
+                self.featureForm = self.iface.getFeatureForm(first_layer, current_first_feature)
                 self._suppressActionMenu(self.featureForm)
                 self.formScrollArea = self._wrapInScrollArea(self.featureForm)
                 self.splitter.addWidget(self.formScrollArea)
@@ -395,9 +396,13 @@ class AttributeWindow:
 
                 self.iface.setActiveLayer(layer)
 
+                if self.featureForm is not None:
+                    self.featureForm.attributeForm().save()  # ✅
+
                 self._removeOldForm()
 
-                self.featureForm = self.iface.getFeatureForm(layer, feature)
+                current_feature = layer.getFeature(feature.id())  # ✅
+                self.featureForm = self.iface.getFeatureForm(layer, current_feature)
                 self._suppressActionMenu(self.featureForm)
                 self.formScrollArea = self._wrapInScrollArea(self.featureForm)
                 self.splitter.addWidget(self.formScrollArea)
