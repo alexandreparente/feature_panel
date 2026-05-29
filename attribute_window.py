@@ -611,6 +611,8 @@ class AttributeWindow:
         if entry is None or not entry.layer.isEditable():
             return
 
+        fid = entry.feature.id()
+
         try:
             self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
         except Exception:
@@ -618,20 +620,8 @@ class AttributeWindow:
 
         try:
             original_selection = entry.layer.selectedFeatureIds()
-
-            entry.layer.selectByIds([entry.feature.id()])
-            self.iface.setActiveLayer(entry.layer)
-
-            delete_action = self.iface.mainWindow().findChild(QAction, "mActionDeleteSelected")
-            if delete_action is not None:
-                delete_action.trigger()
-
-            is_deleted = not entry.layer.getFeature(entry.feature.id()).isValid()
-            remaining  = (
-                [fid for fid in original_selection if fid != entry.feature.id()]
-                if is_deleted else original_selection
-            )
-            entry.layer.selectByIds(remaining)
+            entry.layer.deleteFeature(fid)
+            entry.layer.selectByIds([f for f in original_selection if f != fid])
         except Exception:
             pass
         finally:
@@ -641,11 +631,4 @@ class AttributeWindow:
                 pass
 
         self.a = None
-        QTimer.singleShot(0, self._safeRefreshAfterDelete)
-
-    def _safeRefreshAfterDelete(self):
-        try:
-            self.iface.mapCanvas().refresh()
-            self.updateAttributes()
-        except Exception:
-            pass
+        QTimer.singleShot(0, self.updateAttributes)
