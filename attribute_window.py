@@ -588,9 +588,7 @@ class AttributeWindow:
         if entry is None:
             return
         try:
-            curr_scale = self.iface.mapCanvas().scale()
-            self.iface.mapCanvas().zoomToFeatureIds(entry.layer, [entry.feature.id()])
-            self.iface.mapCanvas().zoomScale(curr_scale)
+            self.iface.mapCanvas().panToFeatureIds(entry.layer, [entry.feature.id()])
         except Exception:
             pass
 
