@@ -357,10 +357,7 @@ class AttributeWindow:
     def _wrapInScrollArea(self, widget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        try:
-            scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        except AttributeError:
-            scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(widget)
         return scroll
 
