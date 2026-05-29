@@ -4,13 +4,13 @@ import os
 from collections import namedtuple
 
 from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTimer, QTranslator
-from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QAction, QApplication, QMenu, QMenuBar,
     QScrollArea, QSplitter, QTreeView,
 )
 from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
-from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm, QgsHighlight
+from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm
 
 from .attribute_window_dockwidget import AttributeWindowDockWidget
 
@@ -53,10 +53,6 @@ class AttributeWindow:
         # Currently selected QStandardItem
         self.a                   = None
         self.featuresInLayerTree = []
-
-        self.lstHighlights = []
-        self.timer = QTimer(self.iface.mapCanvas())
-        self.timer.timeout.connect(self.finishFlash)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -168,10 +164,6 @@ class AttributeWindow:
             QApplication.instance().focusWindowChanged.disconnect(self._onFocusWindowChanged)
         except Exception:
             pass
-
-        if hasattr(self, "timer") and self.timer.isActive():
-            self.timer.stop()
-        self.finishFlash()
 
         self.a                   = None
         self.featuresInLayerTree = []
@@ -607,25 +599,9 @@ class AttributeWindow:
         if entry is None:
             return
         try:
-            h = QgsHighlight(self.iface.mapCanvas(), entry.feature.geometry(), entry.layer)
-            h.setColor(QColor(255, 0, 0, 255))
-            h.setWidth(3)
-            h.setFillColor(QColor(255, 0, 0, 100))
-            self.lstHighlights.append(h)
-            self.timer.start(500)
+            self.iface.mapCanvas().flashFeatureIds(entry.layer, [entry.feature.id()])
         except Exception:
             pass
-
-    def finishFlash(self):
-        self.timer.stop()
-        try:
-            for h in self.lstHighlights:
-                try:
-                    h.hide()
-                except Exception:
-                    pass
-        finally:
-            self.lstHighlights = []
 
     def deleteFeatureActionFunc(self):
         """Delete the tree-selected feature while preserving the rest of the selection."""
