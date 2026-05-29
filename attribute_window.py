@@ -146,6 +146,9 @@ class AttributeWindow:
         self.layerTree = QTreeView()
         self.layerTree.setHeaderHidden(True)
         self.layerTree.setMinimumSize(100, 120)
+        self.layerTree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.layerTree.clicked.connect(self.updateFeatureFromTreeView)
+        self.layerTree.customContextMenuRequested.connect(self.openMenu)
         self.splitter.addWidget(self.layerTree)
         self.dockwidget.setContentWidget(self.splitter)
 
@@ -424,18 +427,6 @@ class AttributeWindow:
         model = QStandardItemModel(self.layerTree)
         self.layerTree.setModel(model)
         self.layerTree.setEnabled(True)
-
-        try:
-            self.layerTree.clicked.disconnect()
-        except Exception:
-            pass
-        try:
-            self.layerTree.customContextMenuRequested.disconnect()
-        except Exception:
-            pass
-        self.layerTree.clicked.connect(self.updateFeatureFromTreeView)
-        self.layerTree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.layerTree.customContextMenuRequested.connect(self.openMenu)
 
         self.featuresInLayerTree = []
         self.a                   = None
