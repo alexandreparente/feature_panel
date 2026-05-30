@@ -80,6 +80,8 @@ class AttributeWindow:
         self.dockwidget = None
         self.toggleEditingAction = None
         self.multiEditAction = None
+        self.zoomAction = None
+        self.flashAction = None
         self.deleteAction = None
         self._editingTrackedLayer = None
         self._pendingUpdate = False
@@ -164,21 +166,23 @@ class AttributeWindow:
         self.multiEditAction.triggered.connect(self._toggleMultiEdit)
         self.dockwidget.toolbar.addAction(self.multiEditAction)
 
-        zoomAction = QAction(
+        self.zoomAction = QAction(
             QgsApplication.getThemeIcon("mActionZoomToSelected.svg"),
             tr("Zoom to Feature"),
             self.dockwidget,
         )
-        zoomAction.triggered.connect(self.zoomToFeatureActionFunc)
-        self.dockwidget.toolbar.addAction(zoomAction)
+        self.zoomAction.setEnabled(False)
+        self.zoomAction.triggered.connect(self.zoomToFeatureActionFunc)
+        self.dockwidget.toolbar.addAction(self.zoomAction)
 
-        flashAction = QAction(
+        self.flashAction = QAction(
             QgsApplication.getThemeIcon("mActionHighlightFeature.svg"),
             tr("Flash Feature"),
             self.dockwidget,
         )
-        flashAction.triggered.connect(self.flashFeatureActionFunc)
-        self.dockwidget.toolbar.addAction(flashAction)
+        self.flashAction.setEnabled(False)
+        self.flashAction.triggered.connect(self.flashFeatureActionFunc)
+        self.dockwidget.toolbar.addAction(self.flashAction)
 
         self.deleteAction = QAction(
             QgsApplication.getThemeIcon("mActionDeleteSelectedFeatures.svg"),
@@ -324,6 +328,10 @@ class AttributeWindow:
                     self.multiEditAction.setChecked(False)
                     self._multiEditActive = False
 
+            if self.zoomAction is not None:
+                self.zoomAction.setEnabled(has_selection)
+            if self.flashAction is not None:
+                self.flashAction.setEnabled(has_selection)
             if self.deleteAction is not None:
                 self.deleteAction.setEnabled(is_editable and has_selection)
         else:
@@ -333,6 +341,10 @@ class AttributeWindow:
                 self.multiEditAction.setEnabled(False)
                 self.multiEditAction.setChecked(False)
                 self._multiEditActive = False
+            if self.zoomAction is not None:
+                self.zoomAction.setEnabled(False)
+            if self.flashAction is not None:
+                self.flashAction.setEnabled(False)
             if self.deleteAction is not None:
                 self.deleteAction.setEnabled(False)
 
@@ -527,7 +539,6 @@ class AttributeWindow:
                 self.splitter.setStretchFactor(0, 1)
                 self.splitter.setStretchFactor(1, 5)
                 self.a = first.item
-                self.layerTree.setCurrentIndex(first.item.index())
                 self._trackEditingLayer(first.layer)
             except Exception:
                 self.featureForm = None
