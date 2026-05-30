@@ -1,25 +1,24 @@
 [general]
-name=Feature Attribute Window
+name=Feature Panel
 description=A dockable attribute window that automatically displays and enables editing feature attributes based on the current map selection.
-version=1.0.1
+version=1.0.0
 qgisMinimumVersion=3.40
 qgisMaximumVersion=4.99
-author=Regio OÜ
-email=geospatial@regio.ee
+author= Alexandre Parente Lima
+email=alexandre.parente@gmail.com
 category=Plugins
-icon=icon.png
-about=Feature Attribute Window provides a persistent, dockable panel that automatically shows attributes of selected features. It groups features by layer in a tree view, lets you click any feature to open its attribute form, and offers right-click actions including zoom, pan, flash, deselect, and delete. It keeps feature information always visible and editable while you work on the map.
+icon=feature_panel.svg
+about=Feature Attribute Window provides a persistent, dockable panel that automatically shows attributes of selected features. It groups features by layer in a tree view, lets you click any feature to open its attribute form, and offers right-click actions including zoom, pan, flash, deselect, and delete. It keeps feature information always visible and editable while you work on the map. This plugin is based on the Feature Attribute Window plugin.
 
 tracker=https://github.com/regio-geospatial/attributewindow/issues
 repository=https://github.com/regio-geospatial/attributewindow
 
 changelog=
     1.0.0 - Initial release
-    1.0.1 - Fix: prevent window resize overflow with large attribute forms
 
 tags= attributes, selection, dockwidget, editing, vector
 
-homepage=https://github.com/regio-geospatial/attributewindow
+homepage=https://github.com/alexandreparente/feature_panel
 
 experimental=false
 deprecated=false

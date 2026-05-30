@@ -31,7 +31,7 @@ class AttributeWindow:
             QCoreApplication.installTranslator(self.translator)
 
         self.actions = []
-        self.menu    = self.tr("&Feature Attribute Window")
+        self.menu    = self.tr("&Feature Panel")
         self.toolbar = self.iface.addToolBar("AttributeWindow")
         self.toolbar.setObjectName("AttributeWindow")
 
@@ -85,8 +85,8 @@ class AttributeWindow:
 
     def initGui(self):
         self.add_action(
-            ":/plugins/attribute_window/feature_panel.svg",
-            text=self.tr("Attribute Window"),
+            ":/plugins/feature_panel/feature_panel.svg",
+            text=self.tr("Feature Panel"),
             parent=self.iface.mainWindow(),
         )
 
