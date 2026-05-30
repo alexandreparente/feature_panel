@@ -536,12 +536,12 @@ class AttributeWindow:
         layer  = self._currentLayer()
         menu   = QMenu(self.layerTree)
 
-        menu.addAction("Deselect").triggered.connect(self.deselectActionFunc)
-        menu.addAction("Zoom to Feature").triggered.connect(self.zoomToFeatureActionFunc)
-        menu.addAction("Pan to Feature").triggered.connect(self.panToFeatureActionFunc)
-        menu.addAction("Flash").triggered.connect(self.flashFeatureActionFunc)
+        menu.addAction(self.tr("Deselect")).triggered.connect(self.deselectActionFunc)
+        menu.addAction(self.tr("Zoom to Feature")).triggered.connect(self.zoomToFeatureActionFunc)
+        menu.addAction(self.tr("Pan to Feature")).triggered.connect(self.panToFeatureActionFunc)
+        menu.addAction(self.tr("Flash")).triggered.connect(self.flashFeatureActionFunc)
 
-        delete_action = menu.addAction("Delete")
+        delete_action = menu.addAction(self.tr("Delete"))
         delete_action.setEnabled(
             layer is not None and isinstance(layer, QgsVectorLayer) and layer.isEditable()
         )
