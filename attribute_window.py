@@ -46,7 +46,7 @@ from qgis.PyQt.QtWidgets import (
     QSplitter,
     QTreeView,
 )
-from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
+from qgis.core import QgsApplication, QgsFeature, QgsProject, QgsVectorLayer
 from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm
 
 from .attribute_window_dockwidget import AttributeWindowDockWidget, tr
@@ -203,11 +203,16 @@ class AttributeWindow:
         self.dockwidget.hide()
 
         self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
+        QgsProject.instance().layersRemoved.connect(self.updateAttributes)
         QApplication.instance().focusWindowChanged.connect(self._onFocusWindowChanged)
 
     def unload(self):
         try:
             self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
+        except Exception:
+            pass
+        try:
+            QgsProject.instance().layersRemoved.disconnect(self.updateAttributes)
         except Exception:
             pass
         try:
