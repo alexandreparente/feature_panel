@@ -539,6 +539,7 @@ class AttributeWindow:
                 self.splitter.setStretchFactor(0, 1)
                 self.splitter.setStretchFactor(1, 5)
                 self.a = first.item
+                self.layerTree.setCurrentIndex(first.item.index())
                 self._trackEditingLayer(first.layer)
             except Exception:
                 self.featureForm = None
