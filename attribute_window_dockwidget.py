@@ -24,13 +24,16 @@
  *                                                                         *
  ***************************************************************************/
 """
+
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtWidgets import QToolBar, QVBoxLayout, QWidget
 from qgis.gui import QgsDockWidget
 from qgis.PyQt.QtCore import QCoreApplication
 
+
 def tr(string):
     return QCoreApplication.translate("@default", string)
+
 
 class AttributeWindowDockWidget(QgsDockWidget):
     def __init__(self, parent=None):

@@ -26,6 +26,7 @@
  ***************************************************************************/
 """
 
+
 def classFactory(iface):  # pylint: disable=invalid-name
     """Load AttributeWindow class from file AttributeWindow.
 
@@ -33,4 +34,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     from .attribute_window import AttributeWindow
+
     return AttributeWindow(iface)

@@ -28,11 +28,23 @@
 import os
 from collections import namedtuple
 
-from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTimer, QTranslator, QLocale
+from qgis.PyQt.QtCore import (
+    QCoreApplication,
+    QSettings,
+    Qt,
+    QTimer,
+    QTranslator,
+    QLocale,
+)
 from qgis.PyQt.QtGui import QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
-    QAction, QApplication, QMenu, QMenuBar,
-    QScrollArea, QSplitter, QTreeView,
+    QAction,
+    QApplication,
+    QMenu,
+    QMenuBar,
+    QScrollArea,
+    QSplitter,
+    QTreeView,
 )
 from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
 from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm
@@ -43,9 +55,8 @@ TreeEntry = namedtuple("TreeEntry", ["item", "feature", "layer"])
 
 
 class AttributeWindow:
-
     def __init__(self, iface):
-        self.iface      = iface
+        self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
 
         self.settings = QSettings()
@@ -61,38 +72,45 @@ class AttributeWindow:
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
 
-
         self.actions = []
-        self.menu    = tr("&Feature Panel")
+        self.menu = tr("&Feature Panel")
         self.toolbar = self.iface.addToolBar("FeaturePanel")
         self.toolbar.setObjectName("FeaturePanel")
 
-        self.dockwidget           = None
-        self.toggleEditingAction  = None
-        self.multiEditAction      = None
-        self.deleteAction         = None
+        self.dockwidget = None
+        self.toggleEditingAction = None
+        self.multiEditAction = None
+        self.deleteAction = None
         self._editingTrackedLayer = None
-        self._pendingUpdate       = False
+        self._pendingUpdate = False
 
         self._multiEditActive = False
-        self._multiEditForm   = None
+        self._multiEditForm = None
 
-        self.featureForm    = None
+        self.featureForm = None
         self.formScrollArea = None
-        self.layerTree      = None
-        self.splitter       = None
+        self.layerTree = None
+        self.splitter = None
 
         # Currently selected QStandardItem
-        self.a                   = None
+        self.a = None
         self.featuresInLayerTree = []
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def add_action(self, icon_path, text, add_to_menu=True, add_to_toolbar=True,
-                   status_tip=None, whats_this=None, parent=None):
-        icon   = QIcon(os.path.join(os.path.dirname(__file__), "feature_panel.svg"))
+    def add_action(
+        self,
+        icon_path,
+        text,
+        add_to_menu=True,
+        add_to_toolbar=True,
+        status_tip=None,
+        whats_this=None,
+        parent=None,
+    ):
+        icon = QIcon(os.path.join(os.path.dirname(__file__), "feature_panel.svg"))
         action = QAction(icon, text, parent)
         action.setCheckable(True)
 
@@ -171,7 +189,7 @@ class AttributeWindow:
         self.deleteAction.triggered.connect(self.deleteFeatureActionFunc)
         self.dockwidget.toolbar.addAction(self.deleteAction)
 
-        self.splitter  = QSplitter(Qt.Orientation.Vertical)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
         self.layerTree = QTreeView()
         self.layerTree.setHeaderHidden(True)
         self.layerTree.setMinimumSize(100, 120)
@@ -193,11 +211,13 @@ class AttributeWindow:
         except Exception:
             pass
         try:
-            QApplication.instance().focusWindowChanged.disconnect(self._onFocusWindowChanged)
+            QApplication.instance().focusWindowChanged.disconnect(
+                self._onFocusWindowChanged
+            )
         except Exception:
             pass
 
-        self.a                   = None
+        self.a = None
         self.featuresInLayerTree = []
         self._trackEditingLayer(None)
         self._removeOldForm()
@@ -269,8 +289,12 @@ class AttributeWindow:
         """Re-subscribe editing signals to a different layer."""
         if self._editingTrackedLayer is not None:
             try:
-                self._editingTrackedLayer.editingStarted.disconnect(self._syncToggleEditingButton)
-                self._editingTrackedLayer.editingStopped.disconnect(self._syncToggleEditingButton)
+                self._editingTrackedLayer.editingStarted.disconnect(
+                    self._syncToggleEditingButton
+                )
+                self._editingTrackedLayer.editingStopped.disconnect(
+                    self._syncToggleEditingButton
+                )
             except Exception:
                 pass
 
@@ -288,7 +312,7 @@ class AttributeWindow:
 
         layer = self._currentLayer()
         if layer is not None and isinstance(layer, QgsVectorLayer):
-            is_editable   = layer.isEditable()
+            is_editable = layer.isEditable()
             has_selection = bool(layer.selectedFeatureIds())
 
             self.toggleEditingAction.setEnabled(True)
@@ -327,7 +351,7 @@ class AttributeWindow:
                 except Exception:
                     pass
             self._multiEditActive = False
-            self._multiEditForm   = None
+            self._multiEditForm = None
             self.layerTree.setEnabled(True)
             self._doUpdateAttributes()
 
@@ -345,7 +369,10 @@ class AttributeWindow:
         self._removeOldForm()
 
         form = QgsAttributeForm(
-            layer, QgsFeature(), QgsAttributeEditorContext(), self.dockwidget,
+            layer,
+            QgsFeature(),
+            QgsAttributeEditorContext(),
+            self.dockwidget,
         )
         try:
             form.setMode(QgsAttributeEditorContext.MultiEditMode)
@@ -361,7 +388,7 @@ class AttributeWindow:
 
         form.hideButtonBox()
 
-        self._multiEditForm   = form
+        self._multiEditForm = form
         self._multiEditActive = True
 
         self.layerTree.clearSelection()
@@ -458,7 +485,7 @@ class AttributeWindow:
         self.layerTree.setEnabled(True)
 
         self.featuresInLayerTree = []
-        self.a                   = None
+        self.a = None
 
         if self.iface.mapCanvas().currentLayer() is None:
             self._trackEditingLayer(None)
@@ -475,8 +502,8 @@ class AttributeWindow:
             layerItem.setEnabled(False)
 
             for feat in features:
-                attrs    = feat.attributes()
-                label    = str(attrs[0]) if attrs else str(feat.id())
+                attrs = feat.attributes()
+                label = str(attrs[0]) if attrs else str(feat.id())
                 featItem = QStandardItem(label)
                 featItem.setEditable(False)
                 self.featuresInLayerTree.append(TreeEntry(featItem, feat, layer))
@@ -490,7 +517,9 @@ class AttributeWindow:
             first = self.featuresInLayerTree[0]
             try:
                 current_feature = first.layer.getFeature(first.feature.id())
-                self.featureForm = self.iface.getFeatureForm(first.layer, current_feature)
+                self.featureForm = self.iface.getFeatureForm(
+                    first.layer, current_feature
+                )
                 self.formScrollArea = self._wrapInScrollArea(self.featureForm)
                 self.splitter.addWidget(self.formScrollArea)
                 self.featureForm.show()
@@ -500,7 +529,7 @@ class AttributeWindow:
                 self.a = first.item
                 self._trackEditingLayer(first.layer)
             except Exception:
-                self.featureForm    = None
+                self.featureForm = None
                 self.formScrollArea = None
                 self._trackEditingLayer(None)
         else:
@@ -526,7 +555,7 @@ class AttributeWindow:
             self.layerTree.setEnabled(True)
 
         self.a = index.model().itemFromIndex(index)
-        entry  = self._currentEntry()
+        entry = self._currentEntry()
         if entry is None:
             return
 
@@ -551,7 +580,7 @@ class AttributeWindow:
             self.splitter.setStretchFactor(1, 5)
             self._trackEditingLayer(entry.layer)
         except Exception:
-            self.featureForm    = None
+            self.featureForm = None
             self.formScrollArea = None
 
     def openMenu(self, position):
@@ -562,17 +591,23 @@ class AttributeWindow:
         else:
             self.a = None
 
-        layer  = self._currentLayer()
-        menu   = QMenu(self.layerTree)
+        layer = self._currentLayer()
+        menu = QMenu(self.layerTree)
 
         menu.addAction(tr("Deselect")).triggered.connect(self.deselectActionFunc)
-        menu.addAction(tr("Zoom to Feature")).triggered.connect(self.zoomToFeatureActionFunc)
-        menu.addAction(tr("Pan to Feature")).triggered.connect(self.panToFeatureActionFunc)
+        menu.addAction(tr("Zoom to Feature")).triggered.connect(
+            self.zoomToFeatureActionFunc
+        )
+        menu.addAction(tr("Pan to Feature")).triggered.connect(
+            self.panToFeatureActionFunc
+        )
         menu.addAction(tr("Flash")).triggered.connect(self.flashFeatureActionFunc)
 
         delete_action = menu.addAction(tr("Delete"))
         delete_action.setEnabled(
-            layer is not None and isinstance(layer, QgsVectorLayer) and layer.isEditable()
+            layer is not None
+            and isinstance(layer, QgsVectorLayer)
+            and layer.isEditable()
         )
         delete_action.triggered.connect(self.deleteFeatureActionFunc)
 
