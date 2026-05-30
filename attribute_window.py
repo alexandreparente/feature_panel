@@ -145,6 +145,9 @@ class AttributeWindow:
         )
         self.dockwidget.setToggleVisibilityAction(self.actions[0])
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dockwidget)
+        self.iface.addTabifiedDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self.dockwidget, [], True
+        )
 
         self.toggleEditingAction = QAction(
             QgsApplication.getThemeIcon("mActionToggleEditing.svg"),

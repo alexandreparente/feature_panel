@@ -38,6 +38,9 @@ def tr(string):
 class AttributeWindowDockWidget(QgsDockWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.setObjectName("FeaturePanelDockWidgetUnique")
+
         self.setWindowTitle(tr("Feature Panel"))
 
         container = QWidget()
