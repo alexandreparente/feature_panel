@@ -63,7 +63,7 @@ class AttributeWindow:
 
     def add_action(self, icon_path, text, add_to_menu=True, add_to_toolbar=True,
                    status_tip=None, whats_this=None, parent=None):
-        icon   = QIcon(os.path.join(os.path.dirname(__file__), "icon.png"))
+        icon   = QIcon(os.path.join(os.path.dirname(__file__), "feature_panel.svg"))
         action = QAction(icon, text, parent)
         action.setCheckable(True)
 
@@ -85,7 +85,7 @@ class AttributeWindow:
 
     def initGui(self):
         self.add_action(
-            ":/plugins/attribute_window/icon.png",
+            ":/plugins/attribute_window/feature_panel.svg",
             text=self.tr("Attribute Window"),
             parent=self.iface.mainWindow(),
         )
