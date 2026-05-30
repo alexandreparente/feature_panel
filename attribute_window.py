@@ -1,9 +1,34 @@
 # -*- coding: utf-8 -*-
+"""
+/***************************************************************************
+ Feature Panel
+                                 A QGIS plugin
+ A dockable panel that automatically displays and enables editing of feature
+ attributes based on the current map selection.
+                              -------------------
+        begin                : 2025
+        copyright            : (C) 2025 by Alexandre Parente Lima
+        email                : alexandre.parente@gmail.com
+
+        Based on Feature Attribute Window
+        copyright            : (C) Regio OÜ
+        email                : geospatial@regio.ee
+        homepage             : https://github.com/regio-geospatial/attributewindow
+ ***************************************************************************/
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+"""
 
 import os
 from collections import namedtuple
 
-from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTimer, QTranslator
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTimer, QTranslator, QLocale
 from qgis.PyQt.QtGui import QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QAction, QApplication, QMenu, QMenuBar,
@@ -12,7 +37,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
 from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm
 
-from .attribute_window_dockwidget import AttributeWindowDockWidget
+from .attribute_window_dockwidget import AttributeWindowDockWidget, tr
 
 TreeEntry = namedtuple("TreeEntry", ["item", "feature", "layer"])
 
@@ -23,17 +48,24 @@ class AttributeWindow:
         self.iface      = iface
         self.plugin_dir = os.path.dirname(__file__)
 
-        locale = str(QSettings().value("locale/userLocale", "en"))[:2]
-        locale_path = os.path.join(self.plugin_dir, "i18n", f"AttributeWindow_{locale}.qm")
+        self.settings = QSettings()
+        locale = self.settings.value("locale/userLocale", QLocale.system().name())
+
+        # Initialize locale
+        locale_path = os.path.join(
+            self.plugin_dir, "i18n", "FeaturePanel_{}.qm".format(locale)
+        )
+
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
 
+
         self.actions = []
-        self.menu    = self.tr("&Feature Panel")
-        self.toolbar = self.iface.addToolBar("AttributeWindow")
-        self.toolbar.setObjectName("AttributeWindow")
+        self.menu    = tr("&Feature Panel")
+        self.toolbar = self.iface.addToolBar("FeaturePanel")
+        self.toolbar.setObjectName("FeaturePanel")
 
         self.dockwidget           = None
         self.toggleEditingAction  = None
@@ -57,9 +89,6 @@ class AttributeWindow:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    def tr(self, message):
-        return QCoreApplication.translate("AttributeWindow", message)
 
     def add_action(self, icon_path, text, add_to_menu=True, add_to_toolbar=True,
                    status_tip=None, whats_this=None, parent=None):
@@ -86,7 +115,7 @@ class AttributeWindow:
     def initGui(self):
         self.add_action(
             ":/plugins/feature_panel/feature_panel.svg",
-            text=self.tr("Feature Panel"),
+            text=tr("Feature Panel"),
             parent=self.iface.mainWindow(),
         )
 
@@ -99,7 +128,7 @@ class AttributeWindow:
 
         self.toggleEditingAction = QAction(
             QgsApplication.getThemeIcon("mActionToggleEditing.svg"),
-            self.tr("Toggle Editing"),
+            tr("Toggle Editing"),
             self.dockwidget,
         )
         self.toggleEditingAction.setCheckable(True)
@@ -109,7 +138,7 @@ class AttributeWindow:
 
         self.multiEditAction = QAction(
             QgsApplication.getThemeIcon("mActionMultiEdit.svg"),
-            self.tr("Edit All Selected Features"),
+            tr("Edit All Selected Features"),
             self.dockwidget,
         )
         self.multiEditAction.setCheckable(True)
@@ -119,7 +148,7 @@ class AttributeWindow:
 
         zoomAction = QAction(
             QgsApplication.getThemeIcon("mActionZoomToSelected.svg"),
-            self.tr("Zoom to Feature"),
+            tr("Zoom to Feature"),
             self.dockwidget,
         )
         zoomAction.triggered.connect(self.zoomToFeatureActionFunc)
@@ -127,7 +156,7 @@ class AttributeWindow:
 
         flashAction = QAction(
             QgsApplication.getThemeIcon("mActionHighlightFeature.svg"),
-            self.tr("Flash Feature"),
+            tr("Flash Feature"),
             self.dockwidget,
         )
         flashAction.triggered.connect(self.flashFeatureActionFunc)
@@ -135,7 +164,7 @@ class AttributeWindow:
 
         self.deleteAction = QAction(
             QgsApplication.getThemeIcon("mActionDeleteSelectedFeatures.svg"),
-            self.tr("Delete Feature"),
+            tr("Delete Feature"),
             self.dockwidget,
         )
         self.deleteAction.setEnabled(False)
@@ -175,7 +204,7 @@ class AttributeWindow:
 
         for action in self.actions:
             try:
-                self.iface.removePluginMenu(self.tr("&Feature Attribute Window"), action)
+                self.iface.removePluginMenu(tr("&Feature Panel"), action)
                 self.iface.removeToolBarIcon(action)
             except Exception:
                 pass
@@ -536,12 +565,12 @@ class AttributeWindow:
         layer  = self._currentLayer()
         menu   = QMenu(self.layerTree)
 
-        menu.addAction(self.tr("Deselect")).triggered.connect(self.deselectActionFunc)
-        menu.addAction(self.tr("Zoom to Feature")).triggered.connect(self.zoomToFeatureActionFunc)
-        menu.addAction(self.tr("Pan to Feature")).triggered.connect(self.panToFeatureActionFunc)
-        menu.addAction(self.tr("Flash")).triggered.connect(self.flashFeatureActionFunc)
+        menu.addAction(tr("Deselect")).triggered.connect(self.deselectActionFunc)
+        menu.addAction(tr("Zoom to Feature")).triggered.connect(self.zoomToFeatureActionFunc)
+        menu.addAction(tr("Pan to Feature")).triggered.connect(self.panToFeatureActionFunc)
+        menu.addAction(tr("Flash")).triggered.connect(self.flashFeatureActionFunc)
 
-        delete_action = menu.addAction(self.tr("Delete"))
+        delete_action = menu.addAction(tr("Delete"))
         delete_action.setEnabled(
             layer is not None and isinstance(layer, QgsVectorLayer) and layer.isEditable()
         )
