@@ -36,7 +36,7 @@ from qgis.PyQt.QtCore import (
     QTranslator,
     QLocale,
 )
-from qgis.PyQt.QtGui import QIcon, QStandardItem, QStandardItemModel
+from qgis.PyQt.QtGui import QColor, QIcon, QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
     QAction,
     QApplication,
@@ -45,9 +45,10 @@ from qgis.PyQt.QtWidgets import (
     QScrollArea,
     QSplitter,
     QTreeView,
+    QWidget,
 )
 from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
-from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm
+from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm, QgsMessageBar
 
 from .attribute_window_dockwidget import AttributeWindowDockWidget, tr
 
@@ -88,6 +89,10 @@ class AttributeWindow:
 
         self._multiEditActive = False
         self._multiEditForm = None
+
+        # Creates a QgsMessageBar to hide the default message of multiEditForm
+        self._multiEditBarSink = QWidget()
+        self._multiEditSilentBar = QgsMessageBar(self._multiEditBarSink)
 
         self.featureForm = None
         self.formScrollArea = None
@@ -272,6 +277,52 @@ class AttributeWindow:
             except Exception:
                 pass
 
+    # ------------------------------------------------------------------
+    # Dirty-state helpers
+    # ------------------------------------------------------------------
+
+    def _setItemDirtyStyle(self, item, dirty: bool):
+        font = item.font()
+        font.setItalic(dirty)
+        item.setFont(font)
+        item.setForeground(QColor(Qt.GlobalColor.red) if dirty else QColor())
+
+    def _isFeatureDirty(self, layer, fid):
+        """Verifica se a feição possui alterações não salvas no buffer de edição da camada."""
+        if not layer or not layer.isEditable():
+            return False
+        buffer = layer.editBuffer()
+        if buffer:
+            if (
+                fid in buffer.changedAttributeValues()
+                or fid in buffer.changedGeometries()
+                or fid in buffer.addedFeatures()
+            ):
+                return True
+        return False
+
+    def _onFeatureModified(self, fid, *args):
+        """Mark a feature dirty when its attributes or geometry change."""
+        for entry in self.featuresInLayerTree:
+            if entry.feature.id() == fid:
+                self._setItemDirtyStyle(entry.item, dirty=True)
+
+    def _onLayerCommitted(self):
+        """Clear all dirty marks after a successful commit."""
+        for entry in self.featuresInLayerTree:
+            self._setItemDirtyStyle(entry.item, dirty=False)
+
+    def _onMultiEditModified(self, *args):
+        """Marca todas as feições da camada atual como editadas quando o formulário multi-edit muda."""
+        layer = self._currentLayer()
+        if not layer:
+            return
+
+        # No multi-edit, todas as feições selecionadas desta camada estão sendo editadas
+        for entry in self.featuresInLayerTree:
+            if entry.layer == layer:
+                self._setItemDirtyStyle(entry.item, dirty=True)
+
     def _toggleEditing(self):
         layer = self._currentLayer()
         if layer is None or not isinstance(layer, QgsVectorLayer):
@@ -302,6 +353,15 @@ class AttributeWindow:
                 self._editingTrackedLayer.editingStopped.disconnect(
                     self._syncToggleEditingButton
                 )
+                self._editingTrackedLayer.attributeValueChanged.disconnect(
+                    self._onFeatureModified
+                )
+                self._editingTrackedLayer.geometryChanged.disconnect(
+                    self._onFeatureModified
+                )
+                self._editingTrackedLayer.afterCommitChanges.disconnect(
+                    self._onLayerCommitted
+                )
             except Exception:
                 pass
 
@@ -310,6 +370,9 @@ class AttributeWindow:
         if layer is not None and isinstance(layer, QgsVectorLayer):
             layer.editingStarted.connect(self._syncToggleEditingButton)
             layer.editingStopped.connect(self._syncToggleEditingButton)
+            layer.attributeValueChanged.connect(self._onFeatureModified)
+            layer.geometryChanged.connect(self._onFeatureModified)
+            layer.afterCommitChanges.connect(self._onLayerCommitted)
 
         self._syncToggleEditingButton()
 
@@ -396,15 +459,19 @@ class AttributeWindow:
 
         form.setMultiEditFeatureIds(ids)
 
-        try:
-            form.setMessageBar(self.iface.messageBar())
-        except AttributeError:
-            pass
+        # Use the persistent MessageBar created in __init__
+        form.setMessageBar(self._multiEditSilentBar)
 
         form.hideButtonBox()
 
         self._multiEditForm = form
         self._multiEditActive = True
+
+        # Connect the change signal in the multi-edit to highlight the tree
+        try:
+            self._multiEditForm.widgetValueChanged.connect(self._onMultiEditModified)
+        except Exception:
+            pass
 
         self.layerTree.clearSelection()
         self.layerTree.setEnabled(False)
@@ -436,9 +503,11 @@ class AttributeWindow:
         return scroll
 
     def _removeOldForm(self):
+
         if self._multiEditForm is not None:
             try:
                 self._multiEditForm.setParent(None)
+                self._multiEditForm.deleteLater()
             except Exception:
                 pass
             self._multiEditForm = None
@@ -451,6 +520,11 @@ class AttributeWindow:
                     self.featureForm.close()
                 except Exception:
                     pass
+            finally:
+                try:
+                    self.featureForm.deleteLater()
+                except Exception:
+                    pass
             self.featureForm = None
 
         if self.formScrollArea is not None:
@@ -458,6 +532,7 @@ class AttributeWindow:
                 w = self.formScrollArea.widget()
                 if w:
                     w.setParent(None)
+                    w.deleteLater()
                 self.formScrollArea.setParent(None)
                 self.formScrollArea.deleteLater()
             except Exception:
@@ -521,6 +596,10 @@ class AttributeWindow:
                 label = str(attrs[0]) if attrs else str(feat.id())
                 featItem = QStandardItem(label)
                 featItem.setEditable(False)
+
+                if self._isFeatureDirty(layer, feat.id()):
+                    self._setItemDirtyStyle(featItem, dirty=True)
+
                 self.featuresInLayerTree.append(TreeEntry(featItem, feat, layer))
                 layerItem.appendRow(featItem)
 
