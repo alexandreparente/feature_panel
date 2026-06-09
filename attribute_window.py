@@ -25,6 +25,7 @@
  ***************************************************************************/
 """
 
+import logging
 import os
 from collections import namedtuple
 
@@ -51,6 +52,8 @@ from qgis.core import QgsApplication, QgsFeature, QgsVectorLayer
 from qgis.gui import QgsAttributeEditorContext, QgsAttributeForm, QgsMessageBar
 
 from .attribute_window_dockwidget import AttributeWindowDockWidget, tr
+
+log = logging.getLogger(__name__)
 
 TreeEntry = namedtuple("TreeEntry", ["item", "feature", "layer"])
 
@@ -89,6 +92,7 @@ class AttributeWindow:
 
         self._multiEditActive = False
         self._multiEditForm = None
+        self._multiEditIds: set = set()  # track IDs for precise dirty marking
 
         # Creates a QgsMessageBar to hide the default message of multiEditForm
         self._multiEditBarSink = QWidget()
@@ -100,7 +104,7 @@ class AttributeWindow:
         self.splitter = None
 
         # Currently selected QStandardItem
-        self._selectedItem = None  # renamed from self.a
+        self._selectedItem = None
         self.featuresInLayerTree = []
 
     # ------------------------------------------------------------------
@@ -220,16 +224,16 @@ class AttributeWindow:
     def unload(self):
         try:
             self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
         try:
             QApplication.instance().focusWindowChanged.disconnect(
                 self._onFocusWindowChanged
             )
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
-        self._selectedItem = None  # renamed from self.a
+        self._selectedItem = None
         self.featuresInLayerTree = []
         self._trackEditingLayer(None)
         self._removeOldForm()
@@ -238,8 +242,8 @@ class AttributeWindow:
             try:
                 self.iface.removePluginMenu(tr("&Feature Panel"), action)
                 self.iface.removeToolBarIcon(action)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("Failed to remove action from menu/toolbar: %s", e)
 
         if self.toolbar is not None:
             self.iface.mainWindow().removeToolBar(self.toolbar)
@@ -252,7 +256,7 @@ class AttributeWindow:
     # ------------------------------------------------------------------
 
     def _currentEntry(self):
-        if self._selectedItem is None:  # renamed from self.a
+        if self._selectedItem is None:
             return None
         return next(
             (e for e in self.featuresInLayerTree if e.item is self._selectedItem), None
@@ -271,13 +275,13 @@ class AttributeWindow:
         if self._multiEditActive and self._multiEditForm is not None:
             try:
                 self._multiEditForm.save()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
         elif self.featureForm is not None:
             try:
                 self.featureForm.attributeForm().save()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
 
     # ------------------------------------------------------------------
     # Dirty-state helpers
@@ -289,8 +293,32 @@ class AttributeWindow:
         item.setFont(font)
         item.setForeground(QColor(Qt.GlobalColor.red) if dirty else QColor())
 
+    def _onEditingStopped(self):
+        """Clear dirty marks when editing ends (commit or rollback confirmed)."""
+        for entry in self.featuresInLayerTree:
+            self._setItemDirtyStyle(entry.item, dirty=False)
+
+    def _connectFormDirtySignal(self, form, item):
+        """Mark item dirty as soon as the user interacts with any field.
+
+        attributeChanged fires whenever a widget is touched — this is intentional:
+        the highlight serves as a visual indicator that the field was accessed,
+        even if the value was not changed.
+        """
+        try:
+            attr_form = form.attributeForm()
+
+            def _on_attribute_changed(_name, _val):
+                self._setItemDirtyStyle(item, dirty=True)
+
+            attr_form.attributeChanged.connect(_on_attribute_changed)
+            # Store the handler so _removeOldForm can disconnect it cleanly.
+            form._dirtyHandler = _on_attribute_changed
+        except Exception as e:
+            log.warning("Could not connect dirty signal: %s", e)
+
     def _isFeatureDirty(self, layer, fid):
-        """Verifica se a feição possui alterações não salvas no buffer de edição da camada."""
+        """Check whether the feature has unsaved changes in the layer's edit buffer."""
         if not layer or not layer.isEditable():
             return False
         buffer = layer.editBuffer()
@@ -303,26 +331,10 @@ class AttributeWindow:
                 return True
         return False
 
-    def _onFeatureModified(self, fid, *args):
-        """Mark a feature dirty when its attributes or geometry change."""
-        for entry in self.featuresInLayerTree:
-            if entry.feature.id() == fid:
-                self._setItemDirtyStyle(entry.item, dirty=True)
-
-    def _onLayerCommitted(self):
-        """Clear all dirty marks after a successful commit."""
-        for entry in self.featuresInLayerTree:
-            self._setItemDirtyStyle(entry.item, dirty=False)
-
     def _onMultiEditModified(self, *args):
-        """Marca todas as feições da camada atual como editadas quando o formulário multi-edit muda."""
-        layer = self._currentLayer()
-        if not layer:
-            return
-
-        # No multi-edit, todas as feições selecionadas desta camada estão sendo editadas
+        """Mark all multi-edit features dirty as soon as any widget is touched."""
         for entry in self.featuresInLayerTree:
-            if entry.layer == layer:
+            if entry.feature.id() in self._multiEditIds:
                 self._setItemDirtyStyle(entry.item, dirty=True)
 
     def _toggleEditing(self):
@@ -336,7 +348,6 @@ class AttributeWindow:
             self._saveCurrentForm()
             self._multiEditActive = False
 
-        # Delegate to the QGIS action to ensure full canvas pipeline (vertex markers, etc.)
         self.iface.setActiveLayer(layer)
         self.iface.actionToggleEditing().trigger()
 
@@ -355,26 +366,19 @@ class AttributeWindow:
                 self._editingTrackedLayer.editingStopped.disconnect(
                     self._syncToggleEditingButton
                 )
-                self._editingTrackedLayer.attributeValueChanged.disconnect(
-                    self._onFeatureModified
+                self._editingTrackedLayer.editingStopped.disconnect(
+                    self._onEditingStopped
                 )
-                self._editingTrackedLayer.geometryChanged.disconnect(
-                    self._onFeatureModified
-                )
-                self._editingTrackedLayer.afterCommitChanges.disconnect(
-                    self._onLayerCommitted
-                )
-            except Exception:
-                pass
+
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
 
         self._editingTrackedLayer = layer
 
         if layer is not None and isinstance(layer, QgsVectorLayer):
             layer.editingStarted.connect(self._syncToggleEditingButton)
             layer.editingStopped.connect(self._syncToggleEditingButton)
-            layer.attributeValueChanged.connect(self._onFeatureModified)
-            layer.geometryChanged.connect(self._onFeatureModified)
-            layer.afterCommitChanges.connect(self._onLayerCommitted)
+            layer.editingStopped.connect(self._onEditingStopped)
 
         self._syncToggleEditingButton()
 
@@ -424,12 +428,11 @@ class AttributeWindow:
         if checked:
             self._showMultiEditForm()
         else:
-            # Explicit save required; hideButtonBox() removed the "Apply" button.
             if self._multiEditForm is not None:
                 try:
                     self._multiEditForm.save()
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug("Suppressed exception: %s", e)
             self._multiEditActive = False
             self._multiEditForm = None
             self.layerTree.setEnabled(True)
@@ -457,7 +460,7 @@ class AttributeWindow:
         try:
             form.setMode(QgsAttributeEditorContext.MultiEditMode)
         except (AttributeError, TypeError):
-            form.setMode(2)  # MultiEditMode = 2 in older QGIS builds
+            form.setMode(2)
 
         form.setMultiEditFeatureIds(ids)
 
@@ -466,14 +469,16 @@ class AttributeWindow:
 
         form.hideButtonBox()
 
+        # store dirty marking
+        self._multiEditIds = set(ids)
+
+        try:
+            form.widgetValueChanged.connect(self._onMultiEditModified)
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
+
         self._multiEditForm = form
         self._multiEditActive = True
-
-        # Connect the change signal in the multi-edit to highlight the tree
-        try:
-            self._multiEditForm.widgetValueChanged.connect(self._onMultiEditModified)
-        except Exception:
-            pass
 
         self.layerTree.clearSelection()
         self.layerTree.setEnabled(False)
@@ -505,28 +510,31 @@ class AttributeWindow:
         return scroll
 
     def _removeOldForm(self):
-
         if self._multiEditForm is not None:
             try:
                 self._multiEditForm.setParent(None)
                 self._multiEditForm.deleteLater()
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("Error removing multi-edit form: %s", e)
             self._multiEditForm = None
 
+        # Disconnect dirty-state signal before destroying the single-edit form.
         if self.featureForm is not None:
+            try:
+                handler = getattr(self.featureForm, "_dirtyHandler", None)
+                if handler is not None:
+                    self.featureForm.attributeForm().attributeChanged.disconnect(
+                        handler
+                    )
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
             try:
                 self.featureForm.accept()
             except Exception:
                 try:
                     self.featureForm.close()
-                except Exception:
-                    pass
-            finally:
-                try:
-                    self.featureForm.deleteLater()
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug("Suppressed exception: %s", e)
             self.featureForm = None
 
         if self.formScrollArea is not None:
@@ -537,8 +545,8 @@ class AttributeWindow:
                     w.deleteLater()
                 self.formScrollArea.setParent(None)
                 self.formScrollArea.deleteLater()
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("Error removing scroll area: %s", e)
             self.formScrollArea = None
 
     # ------------------------------------------------------------------
@@ -577,7 +585,7 @@ class AttributeWindow:
         self.layerTree.setEnabled(True)
 
         self.featuresInLayerTree = []
-        self._selectedItem = None  # renamed from self.a
+        self._selectedItem = None
 
         if self.iface.mapCanvas().currentLayer() is None:
             self._trackEditingLayer(None)
@@ -620,9 +628,10 @@ class AttributeWindow:
                 self.splitter.addWidget(self.formScrollArea)
                 self.featureForm.show()
                 self._suppressActionMenu(self.featureForm)
+                self._connectFormDirtySignal(self.featureForm, first.item)
                 self.splitter.setStretchFactor(0, 1)
                 self.splitter.setStretchFactor(1, 5)
-                self._selectedItem = first.item  # renamed from self.a
+                self._selectedItem = first.item
                 self.layerTree.setCurrentIndex(first.item.index())
                 self._trackEditingLayer(first.layer)
             except Exception:
@@ -644,14 +653,14 @@ class AttributeWindow:
             if self._multiEditForm is not None:
                 try:
                     self._multiEditForm.save()
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.debug("Suppressed exception: %s", e)
             self._multiEditActive = False
             if self.multiEditAction is not None:
                 self.multiEditAction.setChecked(False)
             self.layerTree.setEnabled(True)
 
-        self._selectedItem = index.model().itemFromIndex(index)  # renamed from self.a
+        self._selectedItem = index.model().itemFromIndex(index)
         entry = self._currentEntry()
         if entry is None:
             return
@@ -661,8 +670,8 @@ class AttributeWindow:
         if self.featureForm is not None:
             try:
                 self.featureForm.attributeForm().save()
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
 
         self._removeOldForm()
 
@@ -673,6 +682,7 @@ class AttributeWindow:
             self.splitter.addWidget(self.formScrollArea)
             self.featureForm.show()
             self._suppressActionMenu(self.featureForm)
+            self._connectFormDirtySignal(self.featureForm, entry.item)
             self.splitter.setStretchFactor(0, 1)
             self.splitter.setStretchFactor(1, 5)
             self._trackEditingLayer(entry.layer)
@@ -683,12 +693,10 @@ class AttributeWindow:
     def openMenu(self, position):
         index = self.layerTree.indexAt(position)
         if index.isValid():
-            self._selectedItem = index.model().itemFromIndex(
-                index
-            )  # renamed from self.a
+            self._selectedItem = index.model().itemFromIndex(index)
             self.updateFeatureFromTreeView(index)
         else:
-            self._selectedItem = None  # renamed from self.a
+            self._selectedItem = None
 
         layer = self._currentLayer()
         menu = QMenu(self.layerTree)
@@ -722,8 +730,8 @@ class AttributeWindow:
             return
         try:
             entry.layer.deselect(entry.feature.id())
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
     def zoomToFeatureActionFunc(self):
         entry = self._currentEntry()
@@ -731,8 +739,8 @@ class AttributeWindow:
             return
         try:
             self.iface.mapCanvas().zoomToFeatureIds(entry.layer, [entry.feature.id()])
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
     def panToFeatureActionFunc(self):
         entry = self._currentEntry()
@@ -740,8 +748,8 @@ class AttributeWindow:
             return
         try:
             self.iface.mapCanvas().panToFeatureIds(entry.layer, [entry.feature.id()])
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
     def flashFeatureActionFunc(self):
         entry = self._currentEntry()
@@ -749,8 +757,8 @@ class AttributeWindow:
             return
         try:
             self.iface.mapCanvas().flashFeatureIds(entry.layer, [entry.feature.id()])
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
     def deleteFeatureActionFunc(self):
         """Delete the tree-selected feature while preserving the rest of the selection."""
@@ -759,9 +767,7 @@ class AttributeWindow:
             if sel and sel.hasSelection():
                 idx = sel.currentIndex()
                 if idx.isValid():
-                    self._selectedItem = idx.model().itemFromIndex(
-                        idx
-                    )  # renamed from self.a
+                    self._selectedItem = idx.model().itemFromIndex(idx)
 
         entry = self._currentEntry()
         if entry is None or not entry.layer.isEditable():
@@ -771,20 +777,20 @@ class AttributeWindow:
 
         try:
             self.iface.mapCanvas().selectionChanged.disconnect(self.updateAttributes)
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
 
         try:
             original_selection = entry.layer.selectedFeatureIds()
             entry.layer.deleteFeature(fid)
             entry.layer.selectByIds([f for f in original_selection if f != fid])
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Suppressed exception: %s", e)
         finally:
             try:
                 self.iface.mapCanvas().selectionChanged.connect(self.updateAttributes)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Suppressed exception: %s", e)
 
         self._selectedItem = None
         QTimer.singleShot(0, self.updateAttributes)
