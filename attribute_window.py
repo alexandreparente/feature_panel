@@ -546,10 +546,7 @@ class AttributeWindow:
 
         if self.formScrollArea is not None:
             try:
-                w = self.formScrollArea.widget()
-                if w:
-                    w.setParent(None)
-                    w.deleteLater()
+                self.formScrollArea.takeWidget()
                 self.formScrollArea.setParent(None)
                 self.formScrollArea.deleteLater()
             except Exception as e:
