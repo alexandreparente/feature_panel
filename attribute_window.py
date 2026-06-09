@@ -251,6 +251,11 @@ class AttributeWindow:
 
         del self.toolbar
 
+        if self.dockwidget is not None:
+            self.iface.removeDockWidget(self.dockwidget)
+            self.dockwidget.deleteLater()
+            self.dockwidget = None
+
     # ------------------------------------------------------------------
     # Current selection helpers
     # ------------------------------------------------------------------
