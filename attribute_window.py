@@ -93,10 +93,8 @@ class AttributeWindow:
         self._multiEditActive = False
         self._multiEditForm = None
         self._multiEditIds: set = set()  # track IDs for precise dirty marking
-
-        # Creates a QgsMessageBar to hide the default message of multiEditForm
-        self._multiEditBarSink = QWidget()
-        self._multiEditSilentBar = QgsMessageBar(self._multiEditBarSink)
+        self._multiEditBarSink = None
+        self._multiEditSilentBar = None
 
         self.featureForm = None
         self.formScrollArea = None
@@ -214,6 +212,10 @@ class AttributeWindow:
         self.layerTree.customContextMenuRequested.connect(self.openMenu)
         self.splitter.addWidget(self.layerTree)
         self.dockwidget.setContentWidget(self.splitter)
+
+        # QgsMessageBar must be created after the Qt widget tree is ready
+        self._multiEditBarSink = QWidget()
+        self._multiEditSilentBar = QgsMessageBar(self._multiEditBarSink)
 
         self.updateAttributes()
         self.dockwidget.hide()
