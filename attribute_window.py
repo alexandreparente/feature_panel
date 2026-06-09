@@ -358,7 +358,7 @@ class AttributeWindow:
         self.iface.setActiveLayer(layer)
         self.iface.actionToggleEditing().trigger()
 
-        if was_editable:
+        if was_editable and not layer.isEditable():
             self._doUpdateAttributes()
 
         self._syncToggleEditingButton()
