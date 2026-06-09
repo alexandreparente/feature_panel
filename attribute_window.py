@@ -100,7 +100,7 @@ class AttributeWindow:
         self.splitter = None
 
         # Currently selected QStandardItem
-        self.a = None
+        self._selectedItem = None  # renamed from self.a
         self.featuresInLayerTree = []
 
     # ------------------------------------------------------------------
@@ -229,7 +229,7 @@ class AttributeWindow:
         except Exception:
             pass
 
-        self.a = None
+        self._selectedItem = None  # renamed from self.a
         self.featuresInLayerTree = []
         self._trackEditingLayer(None)
         self._removeOldForm()
@@ -252,9 +252,11 @@ class AttributeWindow:
     # ------------------------------------------------------------------
 
     def _currentEntry(self):
-        if self.a is None:
+        if self._selectedItem is None:  # renamed from self.a
             return None
-        return next((e for e in self.featuresInLayerTree if e.item is self.a), None)
+        return next(
+            (e for e in self.featuresInLayerTree if e.item is self._selectedItem), None
+        )
 
     def _currentLayer(self):
         entry = self._currentEntry()
@@ -575,7 +577,7 @@ class AttributeWindow:
         self.layerTree.setEnabled(True)
 
         self.featuresInLayerTree = []
-        self.a = None
+        self._selectedItem = None  # renamed from self.a
 
         if self.iface.mapCanvas().currentLayer() is None:
             self._trackEditingLayer(None)
@@ -620,7 +622,7 @@ class AttributeWindow:
                 self._suppressActionMenu(self.featureForm)
                 self.splitter.setStretchFactor(0, 1)
                 self.splitter.setStretchFactor(1, 5)
-                self.a = first.item
+                self._selectedItem = first.item  # renamed from self.a
                 self.layerTree.setCurrentIndex(first.item.index())
                 self._trackEditingLayer(first.layer)
             except Exception:
@@ -649,7 +651,7 @@ class AttributeWindow:
                 self.multiEditAction.setChecked(False)
             self.layerTree.setEnabled(True)
 
-        self.a = index.model().itemFromIndex(index)
+        self._selectedItem = index.model().itemFromIndex(index)  # renamed from self.a
         entry = self._currentEntry()
         if entry is None:
             return
@@ -681,10 +683,12 @@ class AttributeWindow:
     def openMenu(self, position):
         index = self.layerTree.indexAt(position)
         if index.isValid():
-            self.a = index.model().itemFromIndex(index)
+            self._selectedItem = index.model().itemFromIndex(
+                index
+            )  # renamed from self.a
             self.updateFeatureFromTreeView(index)
         else:
-            self.a = None
+            self._selectedItem = None  # renamed from self.a
 
         layer = self._currentLayer()
         menu = QMenu(self.layerTree)
@@ -755,7 +759,9 @@ class AttributeWindow:
             if sel and sel.hasSelection():
                 idx = sel.currentIndex()
                 if idx.isValid():
-                    self.a = idx.model().itemFromIndex(idx)
+                    self._selectedItem = idx.model().itemFromIndex(
+                        idx
+                    )  # renamed from self.a
 
         entry = self._currentEntry()
         if entry is None or not entry.layer.isEditable():
@@ -780,5 +786,5 @@ class AttributeWindow:
             except Exception:
                 pass
 
-        self.a = None
+        self._selectedItem = None
         QTimer.singleShot(0, self.updateAttributes)
